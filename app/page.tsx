@@ -7,10 +7,12 @@ import DashboardOverview from '../components/DashboardOverview';
 import DetailsTable from '../components/DetailsTable';
 import { ProcessedFile, analyzeMultiDay, MultiDayResult } from '../utils/comparator';
 import { generateDemoData } from '../utils/demoGenerator';
+import { loadRealAuditData } from '../utils/realDataLoader';
 
 export default function Home() {
   const [loadedFiles, setLoadedFiles] = useState<ProcessedFile[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table'>('dashboard');
+  const [isLoadingReal, setIsLoadingReal] = useState(false);
 
   const handleFilesLoaded = (newFiles: ProcessedFile[]) => {
     setLoadedFiles(prev => {
@@ -31,6 +33,18 @@ export default function Home() {
   const loadDemoData = () => {
     const demoFiles = generateDemoData();
     setLoadedFiles(demoFiles);
+  };
+
+  const loadRealData = async () => {
+    setIsLoadingReal(true);
+    try {
+      const realFiles = await loadRealAuditData();
+      setLoadedFiles(realFiles);
+    } catch (err) {
+      console.error('Error al cargar archivos reales:', err);
+    } finally {
+      setIsLoadingReal(false);
+    }
   };
 
   // Ejecutar motor de análisis multidía
@@ -109,13 +123,19 @@ export default function Home() {
                 />
               </div>
 
-              <div className="pt-6 flex flex-col items-center space-y-3">
-                <p className="text-xs text-slate-500">¿No tienes archivos a mano?</p>
+              <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={loadRealData}
+                  disabled={isLoadingReal}
+                  className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs tracking-wide shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 transition duration-200 disabled:opacity-50"
+                >
+                  {isLoadingReal ? 'Cargando Auditorías...' : '⚡ Cargar Auditoría Real (13/07 al 28/07)'}
+                </button>
                 <button
                   onClick={loadDemoData}
-                  className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold px-6 py-2.5 rounded-xl text-xs tracking-wide shadow-lg shadow-violet-500/10 hover:shadow-violet-500/20 transition duration-200"
+                  className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-semibold px-6 py-2.5 rounded-xl text-xs tracking-wide transition duration-200"
                 >
-                  Probar con Datos Demo de 3 Días (13/07 al 15/07)
+                  Probar Datos Demo (3 Días)
                 </button>
               </div>
             </div>
@@ -139,18 +159,25 @@ export default function Home() {
               </div>
 
               {/* Controles rápidos */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadRealData}
+                  disabled={isLoadingReal}
+                  className="text-xs text-emerald-400 hover:text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-3 py-1.5 rounded-lg transition font-semibold disabled:opacity-50"
+                >
+                  {isLoadingReal ? 'Cargando...' : '⚡ Cargar Auditoría Real'}
+                </button>
                 <button
                   onClick={loadDemoData}
                   className="text-xs text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg transition"
                 >
-                  Restaurar Demo
+                  Cargar Demo
                 </button>
                 <button
                   onClick={handleClear}
                   className="text-xs text-slate-100 hover:text-white bg-violet-600 hover:bg-violet-500 px-3 py-1.5 rounded-lg transition font-semibold"
                 >
-                  Cargar nuevos archivos
+                  Limpiar
                 </button>
               </div>
             </div>
