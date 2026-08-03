@@ -37,6 +37,11 @@ export interface ComparisonRow {
   latestDate: string;
 }
 
+export interface OrderComparisonRow extends ComparisonRow {
+  taskCount: number;
+  activeTaskCount: number;
+}
+
 export interface DailyTrendPoint {
   dateStr: string;
   active: number;
@@ -56,6 +61,10 @@ export interface MultiDayResult {
   };
   trendData: DailyTrendPoint[];
   rows: ComparisonRow[];
+  orderRows: OrderComparisonRow[];
+  orderSummary: MultiDayResult['summary'];
+  orderTrendData: DailyTrendPoint[];
+  orderCostCenters: string[];
   costCenters: string[];
   allDates: string[]; // lista de todas las fechas ordenadas
 }
@@ -68,7 +77,9 @@ export function analyzeMultiDay(files: ProcessedFile[]): MultiDayResult {
   if (files.length === 0) {
     return {
       summary: { totalFiles: 0, latestTotal: 0, latestResolved: 0, latestNew: 0, latestPersistent: 0, totalDiscovered: 0 },
-      trendData: [], rows: [], costCenters: [], allDates: []
+      trendData: [], rows: [], orderRows: [],
+      orderSummary: { totalFiles: 0, latestTotal: 0, latestResolved: 0, latestNew: 0, latestPersistent: 0, totalDiscovered: 0 },
+      orderTrendData: [], orderCostCenters: [], costCenters: [], allDates: []
     };
   }
 
@@ -93,6 +104,7 @@ export function analyzeMultiDay(files: ProcessedFile[]): MultiDayResult {
   // 2. Mapear la presencia e historial de hallazgos por cada tarea
   sortedFiles.forEach(file => {
     file.data.forEach(row => {
+      if (row.excludedFromMeasurement) return;
       const cc = row.costCenter || 'Sin Base';
       costCentersSet.add(cc);
 
@@ -246,6 +258,82 @@ export function analyzeMultiDay(files: ProcessedFile[]): MultiDayResult {
   // Métricas del último día para tarjetas de KPI
   const latestTrend = trendData[trendData.length - 1];
 
+  // Segunda lectura del mismo resultado: agrupa las tareas por orden para que
+  // una orden con varias tareas no pese varias veces en la medición principal.
+  const orderMap = new Map<string, OrderComparisonRow>();
+  rows.forEach(row => {
+    const orderKey = String(row.orderNumber);
+    const existing = orderMap.get(orderKey);
+    if (!existing) {
+      orderMap.set(orderKey, {
+        ...row,
+        key: orderKey,
+        task: '',
+        taskCount: 1,
+        activeTaskCount: allDates.reduce((count, date) => count + (row.presence[date] ? 1 : 0), 0),
+        latestFinding: row.latestFinding,
+        latestDetail: row.latestDetail,
+      });
+      return;
+    }
+
+    existing.taskCount += 1;
+    existing.activeTaskCount += allDates.reduce((count, date) => count + (row.presence[date] ? 1 : 0), 0);
+    allDates.forEach(date => {
+      existing.presence[date] = !!existing.presence[date] || !!row.presence[date];
+      const point = existing.timeline.find(item => item.dateStr === date);
+      const rowPoint = row.timeline.find(item => item.dateStr === date);
+      if (point && rowPoint?.present) {
+        point.present = true;
+        point.finding = [point.finding, rowPoint.finding].filter(Boolean).join(' | ');
+        point.detail = [point.detail, rowPoint.detail].filter(Boolean).join(' | ');
+      }
+    });
+    existing.latestFinding = [existing.latestFinding, row.latestFinding].filter(Boolean).join(' | ');
+    existing.latestDetail = [existing.latestDetail, row.latestDetail].filter(Boolean).join(' | ');
+    if (String(row.latestDate).localeCompare(existing.latestDate) > 0) {
+      existing.latestDate = row.latestDate;
+    }
+  });
+
+  const orderRows = Array.from(orderMap.values()).map(row => {
+    const presentLatest = !!row.presence[latestDateStr];
+    const presentPrev = prevDateStr ? !!row.presence[prevDateStr] : false;
+    let status: ComparisonStatus = 'PERSISTENT_SAME';
+    if (presentLatest && !presentPrev) status = 'NEW';
+    else if (!presentLatest && presentPrev) status = 'RESOLVED';
+    else if (presentLatest && presentPrev) {
+      const latest = row.timeline.find(point => point.dateStr === latestDateStr);
+      const previous = row.timeline.find(point => point.dateStr === prevDateStr);
+      status = latest?.finding === previous?.finding && latest?.detail === previous?.detail
+        ? 'PERSISTENT_SAME'
+        : 'PERSISTENT_CHANGED';
+    } else if (!presentLatest && !presentPrev) status = 'RESOLVED';
+    return { ...row, status };
+  });
+
+  const orderTrendData = sortedFiles.map((file, index) => {
+    const currentKeys = new Set(file.data.filter(row => !row.excludedFromMeasurement).map(row => String(row.orderNumber)));
+    const previousKeys = index > 0
+      ? new Set(sortedFiles[index - 1].data.filter(row => !row.excludedFromMeasurement).map(row => String(row.orderNumber)))
+      : new Set<string>();
+    let newCount = 0;
+    let resolvedCount = 0;
+    let persistentCount = 0;
+    currentKeys.forEach(key => previousKeys.has(key) ? persistentCount++ : newCount++);
+    previousKeys.forEach(key => { if (!currentKeys.has(key)) resolvedCount++; });
+    return { dateStr: file.dateStr, active: currentKeys.size, new: newCount, resolved: resolvedCount, persistent: persistentCount };
+  });
+
+  const orderSummary = {
+    totalFiles: files.length,
+    latestTotal: orderTrendData[orderTrendData.length - 1]?.active || 0,
+    latestResolved: orderTrendData[orderTrendData.length - 1]?.resolved || 0,
+    latestNew: orderTrendData[orderTrendData.length - 1]?.new || 0,
+    latestPersistent: orderTrendData[orderTrendData.length - 1]?.persistent || 0,
+    totalDiscovered: new Set(orderRows.map(row => row.key)).size
+  };
+
   return {
     summary: {
       totalFiles: files.length,
@@ -257,6 +345,10 @@ export function analyzeMultiDay(files: ProcessedFile[]): MultiDayResult {
     },
     trendData,
     rows,
+    orderRows,
+    orderSummary,
+    orderTrendData,
+    orderCostCenters: Array.from(new Set(orderRows.map(row => row.costCenter))).filter(Boolean).sort(),
     costCenters: Array.from(costCentersSet).filter(Boolean).sort(),
     allDates
   };

@@ -62,6 +62,8 @@ export function generateDemoData(): ProcessedFile[] {
       detail: taskDef.detail,
       downloadDate: '13/07/2026',
       controlState: ' - ',
+      okState: '',
+      excludedFromMeasurement: false,
       key
     });
   }
@@ -101,6 +103,8 @@ export function generateDemoData(): ProcessedFile[] {
       detail: taskDef.detail,
       downloadDate: '14/07/2026',
       controlState: ' - ',
+      okState: '',
+      excludedFromMeasurement: false,
       key
     });
   }
@@ -154,6 +158,8 @@ export function generateDemoData(): ProcessedFile[] {
       detail: taskDef.detail,
       downloadDate: '15/07/2026',
       controlState: ' - ',
+      okState: '',
+      excludedFromMeasurement: false,
       key
     });
   }

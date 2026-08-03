@@ -404,6 +404,11 @@ export default function DetailsTable({ rows, costCenters, allDates }: DetailsTab
         </table>
       </div>
 
+      <div className="mt-4 rounded-xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-xs leading-relaxed text-slate-400">
+        <span className="font-bold text-violet-300">¿Cómo leer esta tabla? </span>
+        Cada fila representa una tarea con hallazgo. En la línea de tiempo, rojo significa que la tarea estaba pendiente, verde que dejó de aparecer y azul que apareció como nueva. Haz clic en una fila para ver el detalle de cada fecha.
+      </div>
+
       {/* Paginación */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-5 pt-4 border-t border-slate-800">
         <div className="flex items-center gap-2">

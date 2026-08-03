@@ -25,17 +25,30 @@ import {
   ListRestart,
   Percent,
   CheckCircle2,
+  ClipboardList,
   Search,
-  ArrowUpDown
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Minus
 } from 'lucide-react';
 import { ComparisonRow, MultiDayResult } from '../utils/comparator';
+
+function Explanation({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mt-4 rounded-xl border border-slate-800/80 bg-slate-950/50 px-4 py-3 text-xs leading-relaxed text-slate-400">
+      <span className="font-bold text-violet-300">¿Cómo leerlo? </span>{children}
+    </div>
+  );
+}
 
 interface DashboardOverviewProps {
   result: MultiDayResult;
 }
 
 export default function DashboardOverview({ result }: DashboardOverviewProps) {
-  const { summary, trendData, rows, allDates } = result;
+  const { allDates } = result;
+  const [analysisLevel, setAnalysisLevel] = useState<'orders' | 'tasks'>('orders');
   const [isMounted, setIsMounted] = useState(false);
   const [baseSearch, setBaseSearch] = useState('');
   const [sortField, setSortField] = useState<'pct' | 'total' | 'active' | 'resolved'>('total');
@@ -47,6 +60,28 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
 
   const latestDateStr = allDates[allDates.length - 1];
   const prevDateStr = allDates.length > 1 ? allDates[allDates.length - 2] : null;
+  const summary = analysisLevel === 'orders' ? result.orderSummary : result.summary;
+  const trendData = analysisLevel === 'orders' ? result.orderTrendData : result.trendData;
+  const rows = analysisLevel === 'orders' ? result.orderRows : result.rows;
+  const unitLabel = analysisLevel === 'orders' ? 'órdenes' : 'tareas';
+
+  const orderResolutionData = useMemo(() => {
+    return result.orderTrendData.map((point, index) => {
+      const previous = index > 0 ? result.orderTrendData[index - 1] : null;
+      const variation = previous ? point.resolved - previous.resolved : 0;
+      const rate = previous && previous.active > 0
+        ? Math.round((point.resolved / previous.active) * 100)
+        : 0;
+
+      return {
+        ...point,
+        previousActive: previous?.active ?? null,
+        variation,
+        resolutionRate: rate,
+        direction: !previous ? 'BASE' : variation > 0 ? 'UP' : variation < 0 ? 'DOWN' : 'SAME'
+      };
+    });
+  }, [result.orderTrendData]);
 
   // 1. Datos de % de Resolución Día a Día (Acumulado y Diario)
   const resolutionTrendData = useMemo(() => {
@@ -189,6 +224,21 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
 
   return (
     <div className="space-y-8 w-full max-w-6xl mx-auto">
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/50 border border-slate-800 rounded-2xl p-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-300">Nivel de medición</p>
+          <p className="text-xs text-slate-500 mt-1">La medición principal es por orden; el detalle por tarea sigue disponible.</p>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-xl p-1">
+          <button onClick={() => setAnalysisLevel('orders')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${analysisLevel === 'orders' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+            <ClipboardList className="h-3.5 w-3.5" /> Por orden
+          </button>
+          <button onClick={() => setAnalysisLevel('tasks')} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${analysisLevel === 'tasks' ? 'bg-violet-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+            <CheckCircle2 className="h-3.5 w-3.5" /> Por tarea
+          </button>
+        </div>
+      </div>
       
       {/* TARJETAS DE KPIs (ÚLTIMO DÍA ANALIZADO) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -199,7 +249,7 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
             <Building2 className="h-24 w-24" />
           </div>
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-            Discrepancias Activas
+            {analysisLevel === 'orders' ? 'Órdenes Activas' : 'Tareas Activas'}
           </p>
           <div className="flex items-baseline gap-2.5 mt-2">
             <span className="text-3xl font-extrabold text-slate-100">
@@ -262,13 +312,13 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
             <ListRestart className="h-24 w-24" />
           </div>
           <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-            Nuevas Discrepancias
+            Nuevas {analysisLevel === 'orders' ? 'Órdenes' : 'Tareas'}
           </p>
           <div className="flex items-baseline gap-2.5 mt-2">
             <span className="text-3xl font-extrabold text-sky-400">
               {newIssues}
             </span>
-            <span className="text-slate-500 text-xs font-medium">nuevas</span>
+            <span className="text-slate-500 text-xs font-medium">nuevas {unitLabel}</span>
           </div>
           <div className="mt-3 flex items-center gap-1.5 text-xs text-sky-400/80">
             <TrendingUp className="h-3.5 w-3.5" />
@@ -334,6 +384,9 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
               </ResponsiveContainer>
             )}
           </div>
+          <Explanation>
+            La zona violeta muestra cuántas {unitLabel} siguen activas en cada fecha. “Nuevas” indica las que aparecen por primera vez respecto del archivo anterior y “Resueltas” las que dejaron de aparecer.
+          </Explanation>
         </div>
 
         {/* GRÁFICO 2: TOP BASES CON MÁS TAREAS ACTIVAS */}
@@ -380,6 +433,9 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
               </ResponsiveContainer>
             )}
           </div>
+          <Explanation>
+            Cada barra representa una base. La parte amarilla son {unitLabel} que continúan pendientes, la celeste son las nuevas y la verde las resueltas desde la fecha anterior. Las bases se ordenan por mayor carga actual.
+          </Explanation>
         </div>
 
       </div>
@@ -444,6 +500,9 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+        <Explanation>
+          La línea continua muestra el porcentaje acumulado de {unitLabel} resueltas desde el inicio del período. La línea punteada muestra el ritmo de resolución de cada ciclo; cuanto más alto, mejor avance en esa fecha.
+        </Explanation>
       </div>
 
       {/* NUEVA TABLA: MATRIZ DE EFICIENCIA Y PORCENTAJE DE RESOLUCIÓN POR BASE */}
@@ -576,6 +635,89 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
             </tbody>
           </table>
         </div>
+        <Explanation>
+          “Total detectadas” es la cantidad histórica de {unitLabel} de esa base. “Activas actuales” son las que todavía tienen un hallazgo en la última fecha y “Resueltas totales” son las que ya no aparecen. El porcentaje y la barra muestran el avance de resolución.
+        </Explanation>
+      </div>
+
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md shadow-lg space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div>
+            <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-sky-400" />
+              Reporte diario de resolución de órdenes
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Mide si la cantidad de órdenes resueltas sube o baja en cada fecha.
+            </p>
+          </div>
+          {orderResolutionData.length > 0 && (() => {
+            const latest = orderResolutionData[orderResolutionData.length - 1];
+            const direction = latest.direction;
+            const Icon = direction === 'UP' ? ArrowUp : direction === 'DOWN' ? ArrowDown : Minus;
+            const label = direction === 'UP' ? 'Sube' : direction === 'DOWN' ? 'Baja' : direction === 'BASE' ? 'Base inicial' : 'Sin cambios';
+            const color = direction === 'UP' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : direction === 'DOWN' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-slate-300 bg-slate-500/10 border-slate-500/20';
+            return (
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold ${color}`}>
+                <Icon className="h-3.5 w-3.5" /> {label} {direction === 'BASE' ? '' : `${Math.abs(latest.variation)} vs. fecha anterior`}
+              </span>
+            );
+          })()}
+        </div>
+
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={orderResolutionData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} tickLine={false} />
+              <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }}
+                formatter={(value: any, name: any) => [value, name]}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              <Bar dataKey="resolved" fill="#34d399" radius={[4, 4, 0, 0]} name="Órdenes resueltas" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider">
+              <tr>
+                <th className="py-3 px-4">Fecha</th>
+                <th className="py-3 px-4">Órdenes activas día anterior</th>
+                <th className="py-3 px-4">Órdenes resueltas</th>
+                <th className="py-3 px-4">Variación</th>
+                <th className="py-3 px-4">Tasa del día</th>
+                <th className="py-3 px-4">Tendencia</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+              {orderResolutionData.map((item) => {
+                const Icon = item.direction === 'UP' ? ArrowUp : item.direction === 'DOWN' ? ArrowDown : Minus;
+                const color = item.direction === 'UP' ? 'text-emerald-400' : item.direction === 'DOWN' ? 'text-rose-400' : 'text-slate-400';
+                const trend = item.direction === 'BASE' ? 'Base inicial' : item.direction === 'UP' ? 'Sube' : item.direction === 'DOWN' ? 'Baja' : 'Igual';
+                return (
+                  <tr key={item.dateStr} className="hover:bg-slate-800/30">
+                    <td className="py-2.5 px-4 font-semibold">{item.dateStr}</td>
+                    <td className="py-2.5 px-4 text-slate-200 font-bold">{item.previousActive === null ? '—' : item.previousActive}</td>
+                    <td className="py-2.5 px-4 text-emerald-400 font-bold">{item.resolved}</td>
+                    <td className={`py-2.5 px-4 font-bold ${color}`}>
+                      {item.direction === 'BASE' ? '—' : `${item.variation > 0 ? '+' : ''}${item.variation}`}
+                    </td>
+                    <td className="py-2.5 px-4">{item.direction === 'BASE' ? '—' : `${item.resolutionRate}%`}</td>
+                    <td className={`py-2.5 px-4 font-bold ${color}`}><span className="inline-flex items-center gap-1"><Icon className="h-3.5 w-3.5" />{trend}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <Explanation>
+          “Órdenes activas día anterior” muestra la base de comparación. “Órdenes resueltas” son las que estaban pendientes y ya no aparecen en la fecha actual. “Variación” compara contra el día anterior: verde significa que se resolvieron más, rojo que se resolvieron menos y gris que no cambió. La tasa indica qué porcentaje de la base anterior se resolvió.
+        </Explanation>
       </div>
 
     </div>

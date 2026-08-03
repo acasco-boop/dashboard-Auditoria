@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import React, { useState, useMemo } from 'react';
 import { LayoutDashboard, FileSpreadsheet, AlertTriangle, Layers2, ShieldCheck, CalendarRange } from 'lucide-react';
@@ -17,7 +17,7 @@ export default function Home() {
   const handleFilesLoaded = (newFiles: ProcessedFile[]) => {
     setLoadedFiles(prev => {
       const updated = [...prev, ...newFiles];
-      // Ordenar por fecha cronológica para consistencia de análisis
+      // Ordenar por fecha cronolÃ³gica para consistencia de anÃ¡lisis
       return updated.sort((a, b) => a.date.getTime() - b.date.getTime());
     });
   };
@@ -47,7 +47,7 @@ export default function Home() {
     }
   };
 
-  // Ejecutar motor de análisis multidía
+  // Ejecutar motor de anÃ¡lisis multidÃ­a
   const analysisResult = useMemo((): MultiDayResult | null => {
     if (loadedFiles.length > 0) {
       return analyzeMultiDay(loadedFiles);
@@ -111,7 +111,7 @@ export default function Home() {
                 Auditoría y Evolución Temporal
               </h2>
               <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-                Carga uno o **múltiples archivos Excel** correspondientes a diferentes fechas. El motor analizará el ciclo de vida de los materiales y órdenes de trabajo para visualizar cómo se reducen las discrepancias a lo largo del tiempo.
+                Carga uno o múltiples archivos Excel correspondientes a diferentes fechas. El motor analizará el ciclo de vida de los materiales y órdenes de trabajo para visualizar cómo se reducen las discrepancias a lo largo del tiempo.
               </p>
 
               <div className="pt-6">
@@ -129,7 +129,7 @@ export default function Home() {
                   disabled={isLoadingReal}
                   className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs tracking-wide shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/20 transition duration-200 disabled:opacity-50"
                 >
-                  {isLoadingReal ? 'Cargando Auditorías...' : '⚡ Cargar Auditoría Real (13/07 al 28/07)'}
+                  {isLoadingReal ? 'Cargando Auditorías...' : '⚡ Cargar Auditoría Real (13/07 al 31/07)'}
                 </button>
                 <button
                   onClick={loadDemoData}
@@ -158,7 +158,7 @@ export default function Home() {
                 </h2>
               </div>
 
-              {/* Controles rápidos */}
+              {/* Controles rÃ¡pidos */}
               <div className="flex items-center gap-2">
                 <button
                   onClick={loadRealData}
@@ -182,7 +182,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Zona de Carga Secundaria (Colapsada/Rápida) */}
+            {/* Zona de Carga Secundaria (Colapsada/RÃ¡pida) */}
             <div className="bg-slate-900/30 border border-slate-900 p-4 rounded-xl">
               <FileUploadZone
                 onFilesLoaded={handleFilesLoaded}
@@ -192,7 +192,7 @@ export default function Home() {
               />
             </div>
 
-            {/* Selector de pestañas */}
+            {/* Selector de pestaÃ±as */}
             <div className="flex border-b border-slate-900">
               <button
                 onClick={() => setActiveTab('dashboard')}
@@ -214,14 +214,14 @@ export default function Home() {
                 }`}
               >
                 <FileSpreadsheet className="h-4 w-4" />
-                <span>Auditoría e Historial</span>
+                <span>Análisis por tarea e historial</span>
                 <span className="ml-1 bg-slate-800 text-[10px] text-slate-300 px-1.5 py-0.5 rounded-full font-bold">
                   {analysisResult.rows.length}
                 </span>
               </button>
             </div>
 
-            {/* CONTENIDOS DE PESTAÑAS */}
+            {/* CONTENIDOS DE PESTAÃ‘AS */}
             {activeTab === 'dashboard' ? (
               <DashboardOverview result={analysisResult} />
             ) : (

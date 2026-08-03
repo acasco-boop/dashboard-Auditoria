@@ -15,6 +15,8 @@ export interface TaskDiscrepancy {
   detail: string;
   downloadDate: string;
   controlState: string;
+  okState: string;
+  excludedFromMeasurement: boolean;
   key: string;
 }
 
@@ -31,8 +33,14 @@ export function parseExcelArrayBuffer(arrayBuffer: ArrayBuffer, fileName: string
   for (const row of rawRows) {
     const orderNumber = row['Nro. Orden'] ?? row['Nro Orden'] ?? row['Orden'] ?? '';
     const task = row['Tarea'] ?? '';
-    
+    const okState = String(row['Estados OK'] ?? row['Estado OK'] ?? '').trim();
+    const excludedFromMeasurement = okState.toLowerCase() === 'ok';
+
     if (!orderNumber && !task) continue;
+
+    // Los registros marcados como OK se conservan en la carga para poder
+    // informar la exclusión, pero nunca entran al análisis ni a las métricas.
+    if (excludedFromMeasurement) continue;
 
     const key = `${orderNumber} - ${task}`;
     
@@ -70,6 +78,8 @@ export function parseExcelArrayBuffer(arrayBuffer: ArrayBuffer, fileName: string
       detail: row['Detalle'] ?? '',
       downloadDate: downloadDateStr,
       controlState: row['Estados Control'] ?? row['Estados de control'] ?? '',
+      okState,
+      excludedFromMeasurement,
       key,
     });
   }

@@ -9,6 +9,7 @@ const REAL_FILES = [
   { name: 'Auditoria_Mantenimiento_Generado (23-07).xlsx', dateStr: '23/07/2026', date: new Date(2026, 6, 23) },
   { name: 'Auditoria_Mantenimiento_Generado (27-07).xlsx', dateStr: '27/07/2026', date: new Date(2026, 6, 27) },
   { name: 'Auditoria_Mantenimiento_Generado (28-07).xlsx', dateStr: '28/07/2026', date: new Date(2026, 6, 28) },
+  { name: 'Auditoria_Mantenimiento_Generado (31-07).xlsx', dateStr: '31/07/2026', date: new Date(2026, 6, 31) },
 ];
 
 export async function loadRealAuditData(): Promise<ProcessedFile[]> {
