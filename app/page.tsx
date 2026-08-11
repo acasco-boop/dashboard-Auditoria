@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { LayoutDashboard, FileSpreadsheet, AlertTriangle, Layers2, ShieldCheck, CalendarRange } from 'lucide-react';
 import FileUploadZone from '../components/FileUploadZone';
 import DashboardOverview from '../components/DashboardOverview';
@@ -46,6 +46,10 @@ export default function Home() {
       setIsLoadingReal(false);
     }
   };
+
+  useEffect(() => {
+    void loadRealData();
+  }, []);
 
   // Ejecutar motor de anÃ¡lisis multidÃ­a
   const analysisResult = useMemo((): MultiDayResult | null => {

@@ -49,6 +49,7 @@ interface DashboardOverviewProps {
 export default function DashboardOverview({ result }: DashboardOverviewProps) {
   const { allDates } = result;
   const [analysisLevel, setAnalysisLevel] = useState<'orders' | 'tasks'>('orders');
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
   const [isMounted, setIsMounted] = useState(false);
   const [baseSearch, setBaseSearch] = useState('');
   const [sortField, setSortField] = useState<'pct' | 'total' | 'active' | 'resolved'>('total');
@@ -58,16 +59,48 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
     setIsMounted(true);
   }, []);
 
-  const latestDateStr = allDates[allDates.length - 1];
-  const prevDateStr = allDates.length > 1 ? allDates[allDates.length - 2] : null;
-  const summary = analysisLevel === 'orders' ? result.orderSummary : result.summary;
-  const trendData = analysisLevel === 'orders' ? result.orderTrendData : result.trendData;
-  const rows = analysisLevel === 'orders' ? result.orderRows : result.rows;
+  const monthOptions = useMemo(() => Array.from(new Set(allDates.map(date => date.slice(3)))).sort(), [allDates]);
+  const filteredDates = useMemo(
+    () => selectedMonths.length === 0 ? allDates : allDates.filter(date => selectedMonths.includes(date.slice(3))),
+    [allDates, selectedMonths]
+  );
+  const latestDateStr = filteredDates[filteredDates.length - 1];
+  const prevDateStr = filteredDates.length > 1 ? filteredDates[filteredDates.length - 2] : null;
+  const sourceTrendData = analysisLevel === 'orders' ? result.orderTrendData : result.trendData;
+  const trendData = filteredDates.map(date => sourceTrendData[allDates.indexOf(date)]).filter(Boolean);
+  const sourceRows = analysisLevel === 'orders' ? result.orderRows : result.rows;
+  const rows = sourceRows.filter(row => filteredDates.some(date => row.presence[date]));
+  const summary = {
+    ...(analysisLevel === 'orders' ? result.orderSummary : result.summary),
+    totalFiles: filteredDates.length,
+    latestTotal: trendData[trendData.length - 1]?.active || 0,
+    latestResolved: trendData[trendData.length - 1]?.resolved || 0,
+    latestNew: trendData[trendData.length - 1]?.new || 0,
+    latestPersistent: trendData[trendData.length - 1]?.persistent || 0,
+    totalDiscovered: rows.length
+  };
+
+  const monthlyComparisonData = useMemo(() => {
+    return selectedMonths.map(month => {
+      const monthIndexes = allDates.map((date, index) => date.slice(3) === month ? index : -1).filter(index => index >= 0);
+      const monthPoints = monthIndexes.map(index => sourceTrendData[index]).filter(Boolean);
+      const first = monthPoints[0];
+      const last = monthPoints[monthPoints.length - 1];
+      return {
+        month,
+        initialActive: first?.active || 0,
+        finalActive: last?.active || 0,
+        resolved: monthPoints.reduce((total, point) => total + point.resolved, 0),
+        delta: (last?.active || 0) - (first?.active || 0)
+      };
+    });
+  }, [allDates, selectedMonths, sourceTrendData]);
   const unitLabel = analysisLevel === 'orders' ? 'órdenes' : 'tareas';
 
   const orderResolutionData = useMemo(() => {
-    return result.orderTrendData.map((point, index) => {
-      const previous = index > 0 ? result.orderTrendData[index - 1] : null;
+    return filteredDates.map((dateStr, index) => {
+      const point = result.orderTrendData[allDates.indexOf(dateStr)];
+      const previous = index > 0 ? result.orderTrendData[allDates.indexOf(filteredDates[index - 1])] : null;
       const variation = previous ? point.resolved - previous.resolved : 0;
       const rate = previous && previous.active > 0
         ? Math.round((point.resolved / previous.active) * 100)
@@ -75,32 +108,28 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
 
       return {
         ...point,
+        dateStr,
         previousActive: previous?.active ?? null,
         variation,
         resolutionRate: rate,
         direction: !previous ? 'BASE' : variation > 0 ? 'UP' : variation < 0 ? 'DOWN' : 'SAME'
       };
     });
-  }, [result.orderTrendData]);
+  }, [allDates, filteredDates, result.orderTrendData]);
 
   // 1. Datos de % de Resolución Día a Día (Acumulado y Diario)
   const resolutionTrendData = useMemo(() => {
     if (trendData.length === 0) return [];
     
-    const discoveredKeys = new Set<string>();
+    let cumulativeResolved = 0;
     
-    return allDates.map((dateStr, idx) => {
-      rows.forEach(r => {
-        if (r.presence[dateStr]) {
-          discoveredKeys.add(r.key);
-        }
-      });
-
+    return filteredDates.map((dateStr, idx) => {
       const activeCount = trendData[idx]?.active || 0;
-      const totalDiscovered = Math.max(discoveredKeys.size, activeCount);
-      const resolvedTotal = Math.max(0, totalDiscovered - activeCount);
-      const acumPct = totalDiscovered > 0 ? Math.round((resolvedTotal / totalDiscovered) * 100) : 0;
       const dailyResolved = trendData[idx]?.resolved || 0;
+      cumulativeResolved += dailyResolved;
+      const totalDiscovered = Math.max(rows.length, activeCount);
+      const resolvedTotal = Math.max(cumulativeResolved, totalDiscovered - activeCount);
+      const acumPct = totalDiscovered > 0 ? Math.round((resolvedTotal / totalDiscovered) * 100) : 0;
       const prevActive = idx > 0 ? (trendData[idx - 1]?.active || 1) : activeCount;
       const dailyPct = prevActive > 0 ? Math.round((dailyResolved / prevActive) * 100) : 0;
 
@@ -113,41 +142,18 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
         totalHistorico: totalDiscovered
       };
     });
-  }, [allDates, trendData, rows]);
+  }, [filteredDates, trendData, rows]);
 
-  // 2. Datos para el Stacked Bar Chart por Centro de Costo (Bases) enfocados en el LATEST DAY
-  const barDataByBase = useMemo(() => {
-    if (!latestDateStr) return [];
-    
-    const baseMap: Record<
-      string,
-      { base: string; Resueltos: number; Nuevos: number; Pendientes: number; totalActive: number }
-    > = {};
-
-    rows.forEach((row) => {
-      const cc = row.costCenter || 'Sin Base';
-      if (!baseMap[cc]) {
-        baseMap[cc] = { base: cc, Resueltos: 0, Nuevos: 0, Pendientes: 0, totalActive: 0 };
-      }
-
-      const presentLatest = !!row.presence[latestDateStr];
-      const presentPrev = prevDateStr ? !!row.presence[prevDateStr] : false;
-
-      if (presentLatest && !presentPrev) {
-        baseMap[cc].Nuevos++;
-        baseMap[cc].totalActive++;
-      } else if (!presentLatest && presentPrev) {
-        baseMap[cc].Resueltos++;
-      } else if (presentLatest && presentPrev) {
-        baseMap[cc].Pendientes++;
-        baseMap[cc].totalActive++;
-      }
-    });
-
-    return Object.values(baseMap)
-      .sort((a, b) => b.totalActive - a.totalActive)
-      .slice(0, 8);
-  }, [rows, latestDateStr, prevDateStr]);
+  // 2. Carga diaria para medir cómo evoluciona el volumen de correcciones.
+  const dailyLoadData = useMemo(() => {
+    return filteredDates.map((dateStr, index) => ({
+      dateStr,
+      active: trendData[index]?.active || 0,
+      new: trendData[index]?.new || 0,
+      resolved: trendData[index]?.resolved || 0,
+      persistent: trendData[index]?.persistent || 0
+    }));
+  }, [filteredDates, trendData]);
 
   // 3. Tabla / Matriz completa de Eficiencia y % de Resolución por Base
   const baseEfficiencyList = useMemo(() => {
@@ -241,6 +247,63 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
       </div>
       
       {/* TARJETAS DE KPIs (ÚLTIMO DÍA ANALIZADO) */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-300">Filtro de meses</p>
+            <p className="text-xs text-slate-500 mt-1">Seleccioná uno o varios meses. Sin selección se muestran todos.</p>
+          </div>
+          <button onClick={() => setSelectedMonths([])} className="self-start md:self-auto text-xs text-violet-300 hover:text-violet-200 border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 rounded-lg">
+            Ver todos
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {monthOptions.map(month => {
+            const selected = selectedMonths.includes(month);
+            return (
+              <button
+                key={month}
+                onClick={() => setSelectedMonths(current => selected ? current.filter(item => item !== month) : [...current, month])}
+                className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${selected ? 'bg-violet-600 border-violet-500 text-white' : 'bg-slate-950 border-slate-700 text-slate-400 hover:text-slate-200'}`}
+              >
+                {month}
+              </button>
+            );
+          })}
+        </div>
+        {selectedMonths.length > 1 && (
+          <p className="text-xs text-sky-300">Comparando {selectedMonths.length} meses en conjunto; las fechas se mantienen separadas en los gráficos.</p>
+        )}
+        {selectedMonths.length > 1 && (
+          <div className="overflow-x-auto rounded-xl border border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-950/80 text-slate-400 uppercase tracking-wider">
+                <tr>
+                  <th className="py-2 px-3">Mes</th>
+                  <th className="py-2 px-3">Activas iniciales</th>
+                  <th className="py-2 px-3">Activas al cierre</th>
+                  <th className="py-2 px-3">Resueltas</th>
+                  <th className="py-2 px-3">Avance</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                {monthlyComparisonData.map(item => (
+                  <tr key={item.month}>
+                    <td className="py-2 px-3 font-semibold">{item.month}</td>
+                    <td className="py-2 px-3">{item.initialActive}</td>
+                    <td className="py-2 px-3">{item.finalActive}</td>
+                    <td className="py-2 px-3 text-emerald-400 font-bold">{item.resolved}</td>
+                    <td className={`py-2 px-3 font-bold ${item.delta <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {item.delta > 0 ? '+' : ''}{item.delta} activas
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         
         {/* KPI: TOTAL ACTIVAS */}
@@ -338,7 +401,7 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
               <LineChartIcon className="h-4 w-4 text-violet-400" />
               Evolución Temporal de Auditoría
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">Historial de volumen de discrepancias acumulado</p>
+            <p className="text-xs text-slate-500 mt-0.5">Muestra cómo cambia la cantidad de {unitLabel} con hallazgos en cada fecha.</p>
           </div>
 
           <div className="h-64 w-full mt-4">
@@ -348,8 +411,8 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={trendData}
+                <LineChart
+                  data={dailyLoadData}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
                   <defs>
@@ -377,15 +440,15 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
                   <Legend
                     wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                   />
-                  <Area type="monotone" dataKey="active" stroke="#8b5cf6" strokeWidth={2.5} fillOpacity={1} fill="url(#colorActive)" name="Discrepancias Activas" />
+                  <Line type="monotone" dataKey="active" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3 }} name="Discrepancias Activas" />
                   <Line type="monotone" dataKey="new" stroke="#38bdf8" strokeWidth={2} name="Nuevas hoy" />
                   <Line type="monotone" dataKey="resolved" stroke="#34d399" strokeWidth={2} name="Resueltas hoy" />
-                </AreaChart>
+                </LineChart>
               </ResponsiveContainer>
             )}
           </div>
           <Explanation>
-            La zona violeta muestra cuántas {unitLabel} siguen activas en cada fecha. “Nuevas” indica las que aparecen por primera vez respecto del archivo anterior y “Resueltas” las que dejaron de aparecer.
+            Cada punto representa una fecha de auditoría. “Activas” son las {unitLabel} que todavía tienen un hallazgo; “Nuevas” son las que aparecen por primera vez respecto de la fecha anterior; y “Resueltas” son las que ya no aparecen. Para medir mejora, buscá que la línea de activas baje y que la de resueltas aumente.
           </Explanation>
         </div>
 
@@ -394,41 +457,33 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
           <div>
             <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
               <BarChart3 className="h-4 w-4 text-violet-400" />
-              Bases con Mayor Carga
+              Carga Diaria de Correcciones
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">Top 8 bases en el último día ({latestDateStr})</p>
+            <p className="text-xs text-slate-500 mt-0.5">Evolución por día del período seleccionado</p>
           </div>
 
           <div className="h-60 w-full mt-4">
-            {barDataByBase.length === 0 ? (
+            {dailyLoadData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-slate-500 italic text-sm">
-                Carga archivos para graficar por bases
+                Carga archivos para graficar por día
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={barDataByBase}
-                  layout="vertical"
+                  data={dailyLoadData}
                   margin={{ top: 5, right: 10, left: -10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis type="number" stroke="#94a3b8" fontSize={9} />
-                  <YAxis
-                    dataKey="base"
-                    type="category"
-                    stroke="#94a3b8"
-                    fontSize={10}
-                    width={50}
-                    tickLine={false}
-                  />
+                  <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={9} tickLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={10} allowDecimals={false} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }}
                     itemStyle={{ fontSize: '11px' }}
                   />
                   <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  <Bar dataKey="Pendientes" stackId="a" fill="#fbbf24" name="Persisten" />
-                  <Bar dataKey="Nuevos" stackId="a" fill="#38bdf8" name="Nuevos" />
-                  <Bar dataKey="Resueltos" fill="#34d399" name="Resueltos hoy" />
+                  <Bar dataKey="active" fill="#fbbf24" name="Activas" />
+                  <Bar dataKey="resolved" fill="#34d399" name="Resueltas" />
+                  <Bar dataKey="new" fill="#38bdf8" name="Nuevas" />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -717,6 +772,32 @@ export default function DashboardOverview({ result }: DashboardOverviewProps) {
 
         <Explanation>
           “Órdenes activas día anterior” muestra la base de comparación. “Órdenes resueltas” son las que estaban pendientes y ya no aparecen en la fecha actual. “Variación” compara contra el día anterior: verde significa que se resolvieron más, rojo que se resolvieron menos y gris que no cambió. La tasa indica qué porcentaje de la base anterior se resolvió.
+        </Explanation>
+      </div>
+
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 backdrop-blur-md shadow-lg">
+        <div className="border-b border-slate-800/80 pb-4">
+          <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+            <TrendingDown className="h-4 w-4 text-emerald-400" />
+            Avance acumulado de correcciones
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">La mejora se ve cuando bajan las activas y suben las resueltas acumuladas.</p>
+        </div>
+        <div className="h-64 w-full mt-5">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={resolutionTrendData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={10} tickLine={false} />
+              <YAxis stroke="#94a3b8" fontSize={10} allowDecimals={false} />
+              <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155' }} />
+              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+              <Line type="monotone" dataKey="activas" stroke="#fbbf24" strokeWidth={2.5} dot={{ r: 3 }} name={`${unitLabel} activas`} />
+              <Line type="monotone" dataKey="resueltasAcumuladas" stroke="#34d399" strokeWidth={2.5} name={`${unitLabel} resueltas acumuladas`} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+        <Explanation>
+          Este gráfico permite ver la tendencia general: si la línea amarilla de activas baja y la línea verde de resueltas acumuladas sube, las correcciones están avanzando. Si ambas se mantienen, conviene revisar las bases o equipos con mayor persistencia.
         </Explanation>
       </div>
 

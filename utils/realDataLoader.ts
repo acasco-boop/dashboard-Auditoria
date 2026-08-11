@@ -1,23 +1,15 @@
 import { parseExcelFromUrl } from './excelParser';
 import { ProcessedFile } from './comparator';
 
-const REAL_FILES = [
-  { name: 'Auditoria_Mantenimiento_Generado (13-07).xlsx', dateStr: '13/07/2026', date: new Date(2026, 6, 13) },
-  { name: 'Auditoria_Mantenimiento_Generado (14-07).xlsx', dateStr: '14/07/2026', date: new Date(2026, 6, 14) },
-  { name: 'Auditoria_Mantenimiento_Generado (15-07).xlsx', dateStr: '15/07/2026', date: new Date(2026, 6, 15) },
-  { name: 'Auditoria_Mantenimiento_Generado (16-07).xlsx', dateStr: '16/07/2026', date: new Date(2026, 6, 16) },
-  { name: 'Auditoria_Mantenimiento_Generado (23-07).xlsx', dateStr: '23/07/2026', date: new Date(2026, 6, 23) },
-  { name: 'Auditoria_Mantenimiento_Generado (27-07).xlsx', dateStr: '27/07/2026', date: new Date(2026, 6, 27) },
-  { name: 'Auditoria_Mantenimiento_Generado (28-07).xlsx', dateStr: '28/07/2026', date: new Date(2026, 6, 28) },
-  { name: 'Auditoria_Mantenimiento_Generado (31-07).xlsx', dateStr: '31/07/2026', date: new Date(2026, 6, 31) },
-];
-
 export async function loadRealAuditData(): Promise<ProcessedFile[]> {
   const results: ProcessedFile[] = [];
+  const manifestResponse = await fetch('/api/audits');
+  if (!manifestResponse.ok) throw new Error(`No se pudo leer la carpeta de auditorías: HTTP ${manifestResponse.status}`);
+  const files: Array<{ name: string; url: string; dateStr: string; date: string }> = await manifestResponse.json();
 
-  for (const item of REAL_FILES) {
+  for (const item of files) {
     try {
-      const data = await parseExcelFromUrl(`/data/${encodeURIComponent(item.name)}`, item.name);
+      const data = await parseExcelFromUrl(item.url, item.name);
       
       const normalizedData = data.map(row => ({
         ...row,
@@ -27,7 +19,7 @@ export async function loadRealAuditData(): Promise<ProcessedFile[]> {
       results.push({
         name: item.name,
         dateStr: item.dateStr,
-        date: item.date,
+        date: new Date(item.date),
         data: normalizedData
       });
     } catch (err) {
