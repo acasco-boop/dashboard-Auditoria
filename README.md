@@ -1,0 +1,127 @@
+# 📊 Dashboard de Auditoría de Mantenimiento (Tareas vs. Materiales)
+
+Plataforma web analítica interactiva diseñada para la **auditoría, control operativo y seguimiento temporal** del ciclo de vida de discrepancias entre órdenes de trabajo y consumo de materiales.
+
+Permite cargar múltiples reportes diarios de auditoría en formato Excel (`.xlsx`, `.csv`) para comparar la evolución cronológica, calcular tasas de resolución, identificar cuellos de botella por centro de costo/base y detectar fallas persistentes.
+
+---
+
+## 🚀 Funcionalidades Principales
+
+- **Análisis Temporal Multidía**: Comparación cruzada automática entre archivos descargados en diferentes fechas para determinar el ciclo de vida completo de cada tarea.
+- **Motor de Clasificación de Estados**:
+  - 🟢 **RESUELTO (`RESOLVED`)**: Discrepancias que estaban presentes en fechas anteriores pero se regularizaron y ya no figuran en el último reporte.
+  - 🔴 **PERSISTENTE (`PERSISTENT`)**: Discrepancias que continúan sin resolverse entre mediciones consecutivas.
+  - 🔵 **NUEVO (`NEW`)**: Discrepancias registradas por primera vez en la última fecha analizada.
+- **Carga de Datos Automática & Manual**: Botón para cargar auditorías reales precargadas (`13/07` al `28/07`), datos de demostración o sistema de *Drag & Drop* para archivos propios.
+- **Filtros e Historial Interactivo**: Búsqueda en tiempo real por Nro. de Orden, Equipo, Tarea, Centro de Costos y Estado de Avance.
+
+---
+
+## 📈 Detalle de Reportes, KPIs y Gráficos
+
+El dashboard está dividido en métricas estratégicas, gráficos de tendencia y tablas detalladas de control:
+
+### 1. Tarjetas de KPIs (Indicadores Clave del Último Ciclo)
+Ubicadas en la parte superior del Dashboard con la foto del día más reciente:
+
+- **Discrepancias Activas**: Total de órdenes/tareas que presentan inconsistencias en el último reporte cargado.
+- **Pendientes Críticos (Persistentes)**: Cantidad y porcentaje de tareas que vienen acarreando la discrepancia desde la fecha previa sin ser regularizadas.
+- **Resueltos en Último Ciclo**: Cantidad de discrepancias que fueron cerradas o corregidas exitosamente en la última jornada, junto a la tasa de efectividad del ciclo.
+- **Nuevas Discrepancias**: Cantidad de inconsistencias recientemente ingresadas en el último reporte.
+
+---
+
+### 2. Gráfico 1: Evolución Temporal de Auditoría (Volumen Histórico)
+- **Tipo de Gráfico**: Área y Líneas combinadas (`AreaChart`).
+- **Propósito**: Muestra la tendencia general del volumen de trabajo a lo largo de las fechas analizadas.
+- **Métricas Representadas**:
+  - 🟣 **Discrepancias Activas (Área Morada)**: Muestra si el stock general de problemas está disminuyendo o aumentando con el tiempo.
+  - 🔵 **Nuevas hoy (Línea Azul)**: Ritmo de aparición de nuevos problemas por fecha.
+  - 🟢 **Resueltas hoy (Línea Verde)**: Volumen de problemas solucionados en cada jornada.
+
+---
+
+### 3. Gráfico 2: Bases con Mayor Carga (Top Centros de Costos)
+- **Tipo de Gráfico**: Barras Apiladas Horizontales (`BarChart`).
+- **Propósito**: Identifica rápidamente qué bases o centros de costos concentran la mayor cantidad de tareas con discrepancias en el último día.
+- **Métricas Representadas**:
+  - 🟡 **Pendientes (Persisten)**: Tareas acumuladas no resueltas en esa base.
+  - 🔵 **Nuevos**: Tareas ingresadas hoy en esa base.
+  - 🟢 **Resueltos hoy**: Tareas regularizadas por la base en la fecha actual.
+
+---
+
+### 4. Gráfico 3: Evolución del Porcentaje de Resolución (%) Día a Día
+- **Tipo de Gráfico**: Líneas de tendencia doble con escala porcentual (`LineChart`).
+- **Propósito**: Evalúa la efectividad operativa y la velocidad de regularización de la compañía día tras día.
+- **Métricas Representadas**:
+  - 🟢 **Tasa de Resolución Acumulada (%)**: Porcentaje total de regularización logrado desde la línea base hasta la fecha seleccionada (`(Total Resueltas / Total Detectadas) * 100`).
+  - 🔷 **Eficiencia Diaria (%)**: Porcentaje de tareas activas del día anterior que fueron resueltas en la jornada actual.
+
+---
+
+### 5. Tabla: Matriz de Eficiencia y Porcentaje de Resolución por Base
+- **Propósito**: Ranking comparativo por Centro de Costos para evaluar el desempeño de cada base.
+- **Columnas**:
+  - **Base / Centro de Costos**: Identificador de la unidad operativa.
+  - **Total Detectadas**: Volumen histórico total de discrepancias registradas en esa base.
+  - **Activas Actuales**: Inconsistencias aún pendientes en el último reporte.
+  - **Resueltas Totales**: Cantidad de tareas regularizadas con éxito.
+  - **% Resolución**: Barra de avance visual a color:
+    - 🟢 **Verde (≥ 75%)**: Avance excelente en limpieza de datos.
+    - 🟡 **Amarillo (40% - 74%)**: Avance medio / En progreso.
+    - 🔴 **Rojo (< 40%)**: Requiere atención inmediata.
+  - **Estado de Avance**: Badge descriptivo con el estado operativo de la base.
+- **Funcionalidades**: Buscador en tiempo real y ordenamiento por click en encabezados de columna.
+
+---
+
+### 6. Pestaña: Auditoría e Historial (Detalle Fila por Fila)
+- **Propósito**: Vista analítica profunda registro por registro para auditores y supervisores de mantenimiento.
+- **Contenido**:
+  - Matriz cronológica visual mostrando la presencia (Check/Cruz) de cada tarea en cada una de las fechas analizadas.
+  - Detalle del equipo, nombre del equipo, hallazgo técnico, estado de la orden y estado de control.
+  - Filtros avanzados por estado final (Resueltos, Nuevos, Persistentes sin cambio, Persistentes con cambio) y por centro de costos.
+
+---
+
+## 🛠️ Tecnologías Utilizadas
+
+- **Framework**: [Next.js 14](https://nextjs.org/) (App Router)
+- **Lenguaje**: TypeScript
+- **Estilos**: Tailwind CSS (Dark Mode & Glassmorphism)
+- **Visualización de Datos**: Recharts
+- **Procesamiento de Archivos**: XLSX (SheetJS)
+- **Iconografía**: Lucide React
+
+---
+
+## 💻 Ejecución Local
+
+1. Instalar dependencias:
+```bash
+npm install
+```
+
+2. Iniciar el servidor de desarrollo:
+```bash
+npm run dev
+```
+
+3. Abrir en el navegador:
+`http://localhost:3000`
+
+---
+
+## ☁️ Despliegue en Vercel
+
+Este proyecto se encuentra optimizado para desplegarse en **Vercel** con cero configuración adicional:
+
+1. Subir cambios al repositorio GitHub:
+```bash
+git add .
+git commit -m "Actualizar proyecto"
+git push origin main
+```
+2. Conectar el repositorio en [Vercel.com](https://vercel.com/new) para compilación e integración continua.
